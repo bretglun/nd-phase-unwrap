@@ -1,0 +1,22 @@
+[project]
+name = "nd-phase-unwrap"
+version = "0.1.0"
+description = "Phase unwrapping for n-dimensional arrays"
+authors = [
+    { name = "Johan Berglund", email = "berglund.hpj@gmail.com" },
+]
+readme = "README.md"
+license = "GPL-3.0-or-later"
+requires-python = ">=3.14"
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/bretglun/nd-phase-unwrap"
+Repository = "https://github.com/bretglun/nd-phase-unwrap"
+
+[project.scripts]
+unwrap = "nd_phase_unwrap.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
