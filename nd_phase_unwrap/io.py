@@ -35,6 +35,7 @@ def load_numpy_data(data_file):
 
 
 def save(arr, filepath):
+    filepath = Path(filepath)
     outdir = filepath.parent
     outdir.mkdir(parents=True, exist_ok=True)
     if filepath.suffix != '.npy':
