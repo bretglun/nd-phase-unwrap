@@ -29,7 +29,7 @@ uv sync
 ### Command-Line Interface
 ```bash
 # Show help
-unwrap -h
+unwrap --help
 
 # Run with config file
 unwrap nd_phase_unwrap/demo/demo.npy -p nd_phase_unwrap/demo/config.yml

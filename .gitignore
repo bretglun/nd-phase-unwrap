@@ -9,4 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
+.*
+!.gitignore
+
+*_unwrapped.npy
+
 TODO.md
