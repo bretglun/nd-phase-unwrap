@@ -31,27 +31,29 @@ uv sync
 # Show help
 unwrap --help
 
+# Unwrap test data
+unwrap test_data/2wraps.npy
+
 # Run with config file
-unwrap nd_phase_unwrap/demo/demo.npy -p nd_phase_unwrap/demo/config.yml
+unwrap test_data/2wraps.npy --config-file demo/config.yml
 ```
 
 See [demo/demo.py](demo/demo.py) for a complete example.
 
 ## Configuration
 Input parameters can be provided as:
-* Human-readable YAML configuration file
 * Python dictionaries
+* Human-readable YAML configuration file (example at [demo/config.yml](demo/config.yml))
 
-An example configuration file is at [demo/config.yml](demo/config.yml).
 The phase to be unwrapped is either the real-valued input array or the phase of the complex-valued input array (the magnitude may be used for weighting).
 
 ## Dependencies
 See [pyproject.toml](pyproject.toml) for the complete list of dependencies.
 
 ## Citation
-If you use this software in your research, please cite:
+The iterative graph cut method for phase unwrapping is described in:
 
-> Berglund J and Skorpil M. Multi-scale graph-cut algorithm for efficient water-fat separation. *Magn Reson Med*, 78(3):941-949, 2017. [[doi: 10.1002/mrm.26479](https://doi.org/10.1002/mrm.26479)]
+> Berglund J, Liljeblad M, and Baron T. Unwrapping Phase Contrast MRI by Iterative Graph Cuts. *Magnetic Resonance in Medicine*, 92(4):1484–1495, 2024. [[doi: 10.1002/mrm.30138](https://doi.org/10.1002/mrm.30138)]
 
 ## License
 This program is free software: you can redistribute it and/or modify it under the terms of the [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0).

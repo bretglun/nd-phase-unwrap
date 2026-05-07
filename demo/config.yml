@@ -1,1 +1,8 @@
+# Algorithm parameters:
 algorithm: IterativeGraphCuts
+data_cost: False
+
+# Data parameters:
+period: 6.2832            # wrapping period
+pixel_spacing: [2.0, 2.0] # length must match number of data dimensions
+cyclic: [False, False]    # length must match number of data dimensions
