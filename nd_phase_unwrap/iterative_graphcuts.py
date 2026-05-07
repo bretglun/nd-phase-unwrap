@@ -1,41 +1,59 @@
 import numpy as np
-import thinqpbo as tq
+import maxflow
 
 
-def QPBO(D, V, cyclic):
+def computeGraphEdges(shape, cyclic):
+    """Flat (i, j) endpoint indices of graph edges, one (i, j) tuple per dim."""
+    ndim = len(shape)
+    idx = np.arange(int(np.prod(shape))).reshape(shape)
+    pairs = []
+    for dim in range(ndim):
+        if cyclic[dim]:
+            ii, jj = idx.ravel(), np.roll(idx, -1, axis=dim).ravel()
+        else:
+            sl = [slice(None)] * ndim
+            sl[dim] = slice(None, -1); ii = idx[tuple(sl)].ravel()
+            sl[dim] = slice(1, None);  jj = idx[tuple(sl)].ravel()
+        pairs.append((ii.astype(np.int32), jj.astype(np.int32)))
+    return pairs
+
+
+def solveMaxflow(D, V, grid_pairs):
+    """Solve a submodular binary MRF via BK max-flow; returns int8 labels in {0,1}."""
     shape = D.shape[1:]
-    numNodes = np.prod(shape)
-    strides = np.zeros(shape, dtype=bool).strides
-    D = D.reshape(2, numNodes)
-    V = V.reshape(4, len(shape), numNodes)
+    n = int(np.prod(shape))
+    ndim = len(grid_pairs)
+    D_flat = D.reshape(2, n)
+    V_flat = V.reshape(4, ndim, n)
+    src_cap, snk_cap = D_flat[1].copy(), D_flat[0].copy()
+    ei, ej, cij, cji = [], [], [], []
 
-    graph = tq.QPBOFloat()
-    graph.add_node(numNodes)
-    
-    # Add unary terms:
-    for i in range(numNodes):
-        graph.add_unary_term(i, D[0, i], D[1, i])
-    
-    # Add binary terms:
-    for dim in range(len(shape)):
-        for i in range(numNodes):
-            j = i + strides[dim]
-            if (j//strides[dim])%shape[dim]==0: # at edge
-                if not cyclic[dim]:
-                    continue
-                j -= shape[dim] * strides[dim] # cycle over edge
-            graph.add_pairwise_term(i, j, V[0, dim, i], V[1, dim, i], V[2, dim, i], V[3, dim, i])
-    
-    graph.solve()
-    
-    label = np.zeros(numNodes)
-    for i in range(numNodes):
-        label[i] = graph.get_label(i)
+    for dim, (ii, jj) in enumerate(grid_pairs):
+        Ai, Bi, Ci = V_flat[0, dim, ii], V_flat[1, dim, ii], V_flat[2, dim, ii]
+        b, c = Bi - Ai, Ci - Ai  # b+c >= 0 (submodular)
+        # Reparameterise into non-negative tedges + directed edges.
+        src_cap[ii] += np.maximum(0.0, -b)
+        snk_cap[ii] += np.maximum(0.0, -c)
+        src_cap[jj] += np.minimum(Ai, Bi)
+        snk_cap[jj] += np.minimum(Ai, Ci)
+        cap_ij = np.maximum(0.0, b + np.minimum(0.0, c))
+        cap_ji = np.maximum(0.0, c + np.minimum(0.0, b))
+        mask = (cap_ij > 0) | (cap_ji > 0)
+        if np.any(mask):
+            ei.append(ii[mask]); ej.append(jj[mask])
+            cij.append(cap_ij[mask]); cji.append(cap_ji[mask])
 
-    return label.reshape(shape)
+    g = maxflow.GraphFloat()
+    nids = g.add_grid_nodes(shape)
+    g.add_grid_tedges(nids, src_cap.reshape(shape), snk_cap.reshape(shape))
+    if ei:
+        g.add_edges(np.concatenate(ei), np.concatenate(ej),
+                    np.concatenate(cij), np.concatenate(cji))
+    g.maxflow()
+    return g.get_grid_segments(nids).astype(np.int8)
 
 
-def betaJumpMove(p, beta, wD, D, wV, V, cyclic):
+def betaJumpMove(p, beta, wD, D, wV, V, grid_pairs):
     pb = p + beta
     D[0,...] = wD * p**2
     D[1,...] = wD * pb**2
@@ -46,12 +64,12 @@ def betaJumpMove(p, beta, wD, D, wV, V, cyclic):
             (pb - np.roll(p , -1, axis=dim))**2,
             (pb - np.roll(pb, -1, axis=dim))**2
         ]
-    label = QPBO(D, V, cyclic)
+    label = solveMaxflow(D, V, grid_pairs)
     p[label==1] += beta
     return p
 
 
-def get_weights(magn, pixel_spacing):
+def getWeights(magn, pixel_spacing):
     M2p = magn**2
     wD = M2p # Data cost weights (to avoid global jumps)
     wV = np.zeros((magn.ndim, *magn.shape))
@@ -73,7 +91,7 @@ def getEnergyWithWeights(p, wD, wV, cyclic):
 
 
 def getEnergy(p, m, mu):
-    wD, wV = get_weights(m, mu)
+    wD, wV = getWeights(m, mu)
     cyclic = [False, False, False, True] # which dims are cyclic?
     return getEnergyWithWeights(p, wD, wV, cyclic)
 
@@ -87,19 +105,20 @@ def removeDrift(p, m, period):
 def unwrap(arr, config):
     magn, phase = np.abs(arr), np.angle(arr)
 
-    wD, wV = get_weights(magn, config.pixel_spacing)
+    wD, wV = getWeights(magn, config.pixel_spacing)
     if not config.data_cost:
         wD *= 0
     
     D = np.zeros((2, *arr.shape))
     V = np.zeros((4, arr.ndim, *arr.shape))
+    grid_pairs = computeGraphEdges(phase.shape, config.cyclic)
 
     minEnergy = getEnergyWithWeights(phase, wD, wV, config.cyclic)
     improved = True
     while improved:
         improved = False
         for beta in [2 * np.pi, -2 * np.pi]: # 2pi jump moves with alternating sign
-            phase_updated = betaJumpMove(phase, beta, wD, D, wV, V, config.cyclic)
+            phase_updated = betaJumpMove(phase, beta, wD, D, wV, V, grid_pairs)
             energy = getEnergyWithWeights(phase_updated, wD, wV, config.cyclic)
             if energy < minEnergy:
                 improved = True

@@ -9,7 +9,7 @@ def demo():
     data_file = data_path / '1wrapsVNR1e3_0.npy'
     wrapped = io.load_numpy_data(data_file)
     config = {
-        'algorithm': 'Laplace',
+        'algorithm': 'IterativeGraphCuts',
         'period': 2 * np.pi,
         'pixel_spacing': (2.0, 2.0),
         'cyclic': (False, False)
