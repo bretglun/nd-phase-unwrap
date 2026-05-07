@@ -2,7 +2,8 @@ from dataclasses import dataclass, fields
 
 
 @dataclass
-class BaseConfig():
+class BaseConfig:
+    pixel_spacing: tuple[float, ...] = None # arbitrary unit, length must match arr.ndim
 
     def __init__(self, **overrides):
         params = {f.name: f.default for f in fields(self) if f.init}
@@ -16,9 +17,7 @@ class BaseConfig():
 
 @dataclass
 class LaplaceConfig(BaseConfig):
-
-    def __init__(self, **overrides):
-        super().__init__(**overrides)
+    pass
 
 
 @dataclass
