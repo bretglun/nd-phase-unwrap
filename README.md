@@ -38,6 +38,30 @@ unwrap test_data/2wraps.npy
 unwrap test_data/2wraps.npy --config-file demo/config.yml
 ```
 
+### Python API
+Example using config dict:
+
+```python
+from nd_phase_unwrap import unwrap
+import numpy as np
+
+unwrapped = unwrap.unwrap(
+    wrapped,
+    {'algorithm': 'IterativeGraphCuts', 'period': 2 * np.pi}
+)
+```
+
+Example using config file:
+
+```python
+from nd_phase_unwrap import unwrap
+
+unwrapped = unwrap.unwrap(
+    wrapped,
+    config_file='demo/config.yml'
+)
+```
+
 See [demo/demo.py](demo/demo.py) for a complete example.
 
 ## Configuration
