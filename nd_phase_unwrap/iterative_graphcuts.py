@@ -3,20 +3,21 @@ import thinqpbo as tq
 
 
 def QPBO(D, V, cyclic):
-    shape = D.shape[1:]
+    shape = V.shape[2:]
     numNodes = np.prod(shape)
     strides = np.zeros(shape, dtype=bool).strides
-    D = D.reshape(2, numNodes)
-    V = V.reshape(4, len(shape), numNodes)
 
     graph = tq.QPBOFloat()
     graph.add_node(numNodes)
     
     # Add unary terms:
-    for i in range(numNodes):
-        graph.add_unary_term(i, D[0, i], D[1, i])
+    if D is not None:
+        D = D.reshape(2, numNodes)
+        for i in range(numNodes):
+            graph.add_unary_term(i, D[0, i], D[1, i])
     
     # Add binary terms:
+    V = V.reshape(4, len(shape), numNodes)
     for dim in range(len(shape)):
         for i in range(numNodes):
             j = i + strides[dim]
@@ -35,10 +36,10 @@ def QPBO(D, V, cyclic):
     return label.reshape(shape)
 
 
-def betaJumpMove(p, beta, wD, D, wV, V, cyclic):
+def beta_jump_move(p, beta, wD, wV, cyclic):
     pb = p + beta
-    D[0,...] = wD * p**2
-    D[1,...] = wD * pb**2
+    D = np.array((wD * p**2, wD * pb**2)) if wD is not None else None
+    V = np.zeros((4, p.ndim, *p.shape))
     for dim in range(p.ndim):
         V[:, dim, ...] = wV[dim] * [
             (p  - np.roll(p , -1, axis=dim))**2,
@@ -51,9 +52,9 @@ def betaJumpMove(p, beta, wD, D, wV, V, cyclic):
     return p
 
 
-def get_weights(magn, pixel_spacing):
+def get_weights(magn, pixel_spacing, data_cost=False):
     M2p = magn**2
-    wD = M2p # Data cost weights (to avoid global jumps)
+    wD = M2p if data_cost else None
     wV = np.zeros((magn.ndim, *magn.shape))
     for dim in range(magn.ndim):
         M2q = np.roll(M2p, -1, axis=dim)
@@ -63,48 +64,42 @@ def get_weights(magn, pixel_spacing):
     return wD, wV
 
 
-def getEnergyWithWeights(p, wD, wV, cyclic):
-    e = np.sum(wD * p**2)
-    for dim in range(p.ndim):
-        e += np.sum(wV[dim] * (p  - np.roll(p , -1, axis=dim))**2)
+def get_energy_with_weights(phase, wD, wV, cyclic):
+    energy = np.sum(wD * phase**2) if wD is not None else 0.
+    for dim in range(phase.ndim):
+        energy += np.sum(wV[dim] * (phase  - np.roll(phase , -1, axis=dim))**2)
         if not cyclic[dim]:
-            e -= np.sum(wV[dim].take(-1, axis=dim) * (p.take(-1, axis=dim) - p.take(0, axis=dim))**2)
-    return e
+            energy -= np.sum(wV[dim].take(-1, axis=dim) * (phase.take(-1, axis=dim) - phase.take(0, axis=dim))**2)
+    return energy
 
 
-def getEnergy(p, m, mu):
-    wD, wV = get_weights(m, mu)
-    cyclic = [False, False, False, True] # which dims are cyclic?
-    return getEnergyWithWeights(p, wD, wV, cyclic)
+def get_energy(phase, magn, pixel_spacing, data_cost, cyclic):
+    wD, wV = get_weights(magn, pixel_spacing, data_cost)
+    return get_energy_with_weights(phase, wD, wV, cyclic)
 
 
-def removeDrift(p, m, period):
-    meanPhase = np.mean(m * p) / np.mean(m)
-    nDriftedPeriods = int(round(meanPhase/period))
-    return p - nDriftedPeriods * period
+def remove_drift(phase, magn, period):
+    mean_phase = np.mean(magn * phase) / np.mean(magn)
+    mean_period = int(round(mean_phase/period))
+    return phase - mean_period * period
 
 
 def unwrap(arr, config):
     magn, phase = np.abs(arr), np.angle(arr)
 
-    wD, wV = get_weights(magn, config.pixel_spacing)
-    if not config.data_cost:
-        wD *= 0
+    wD, wV = get_weights(magn, config.pixel_spacing, config.data_cost)
     
-    D = np.zeros((2, *arr.shape))
-    V = np.zeros((4, arr.ndim, *arr.shape))
-
-    minEnergy = getEnergyWithWeights(phase, wD, wV, config.cyclic)
+    min_energy = get_energy_with_weights(phase, wD, wV, config.cyclic)
     improved = True
     while improved:
         improved = False
         for beta in [2 * np.pi, -2 * np.pi]: # 2pi jump moves with alternating sign
-            phase_updated = betaJumpMove(phase, beta, wD, D, wV, V, config.cyclic)
-            energy = getEnergyWithWeights(phase_updated, wD, wV, config.cyclic)
-            if energy < minEnergy:
+            phase_updated = beta_jump_move(phase, beta, wD, wV, config.cyclic)
+            energy = get_energy_with_weights(phase_updated, wD, wV, config.cyclic)
+            if energy < min_energy:
                 improved = True
                 phase = phase_updated
-                minEnergy = energy
+                min_energy = energy
     if not config.data_cost:
-        phase = removeDrift(phase, magn, period=2*np.pi)
+        phase = remove_drift(phase, magn, period=2*np.pi)
     return phase
