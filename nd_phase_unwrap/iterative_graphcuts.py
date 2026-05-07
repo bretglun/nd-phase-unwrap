@@ -52,9 +52,9 @@ def beta_jump_move(p, beta, wD, wV, cyclic):
     return p
 
 
-def get_weights(magn, pixel_spacing, data_cost=False):
+def get_weights(magn, pixel_spacing, data_cost=0):
     M2p = magn**2
-    wD = M2p if data_cost else None
+    wD = data_cost * M2p if data_cost > 0 else None
     wV = np.zeros((magn.ndim, *magn.shape))
     for dim in range(magn.ndim):
         M2q = np.roll(M2p, -1, axis=dim)
