@@ -27,6 +27,11 @@ def unwrap(arr, config_dict={}, config_file=None):
         config['pixel_spacing'] = tuple(1. for _ in range(arr.ndim))
     elif len(config['pixel_spacing']) != arr.ndim:
         raise ValueError(f'Length of "pixel_spacing" must match number of dimensions in input array (got {len(config["pixel_spacing"])} and {arr.ndim}, respectively).')
+    
+    if 'cyclic' not in config:
+        config['cyclic'] = tuple(False for _ in range(arr.ndim))
+    elif len(config['cyclic']) != arr.ndim:
+        raise ValueError(f'Length of "cyclic" must match number of dimensions in input array (got {len(config["cyclic"])} and {arr.ndim}, respectively).')
 
     algorithm_config = ALGORITHMS[algorithm]['config_class'](**config)
     unwrapped = ALGORITHMS[algorithm]['module'].unwrap(arr, algorithm_config)
