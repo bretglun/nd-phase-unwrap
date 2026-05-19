@@ -1,6 +1,6 @@
 # Algorithm parameters:
 algorithm: IterativeGraphCuts
-data_cost: False
+data_cost: 0.0
 
 # Data parameters:
 period: 6.2832            # wrapping period

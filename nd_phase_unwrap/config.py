@@ -23,4 +23,4 @@ class LaplaceConfig(BaseConfig):
 
 @dataclass
 class IGCconfig(BaseConfig):
-    data_cost: bool = False # include data cost in energy function (to avoid global 2π-drift)
+    data_cost: float = 0. # weight of data cost in energy function (to avoid global 2π-drift)
