@@ -1,6 +1,7 @@
 from pathlib import Path
 import numpy as np
 import yaml
+import xarray as xr
 
 
 def read_config_file(config_file):
@@ -33,6 +34,16 @@ def load_numpy_data(data_file):
     
     return np.load(data_file)
 
+def load_xarray_data(data_file):
+    if not data_file:
+        raise ValueError('No data file specified')
+    
+    if not data_file.is_file():
+        raise FileNotFoundError(f'Could not find data file "{data_file}"')
+    
+    if data_file.suffix != '.nc':
+        raise ValueError(f'Data file must be in .nc format, not "{data_file}"')
+    return xr.open_dataset(data_file, auto_complex=True)
 
 def save(arr, filepath):
     filepath = Path(filepath)

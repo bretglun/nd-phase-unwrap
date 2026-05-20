@@ -5,8 +5,10 @@ import matplotlib.pyplot as plt
 
 
 def demo():
-    data_path = Path(__file__).parent.parent / 'test_data'
+    data_path = Path(__file__).parent.parent / 'test_data' / '2Dphantom'
     data_file = data_path / '1wrapsVNR1e3_0.npy'
+    if not data_file.is_file():
+        raise FileNotFoundError(f"Data file not found: {data_file}. Create necessary data files by running `simulate_test_data2D.py`.")
     wrapped = io.load_numpy_data(data_file)
     config = {
         'algorithm': 'IterativeGraphCuts',

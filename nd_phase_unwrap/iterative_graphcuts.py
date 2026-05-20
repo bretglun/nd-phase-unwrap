@@ -53,7 +53,7 @@ def solveMaxflow(D, V, grid_pairs):
     return g.get_grid_segments(nids).astype(np.int8)
 
 
-def betaJumpMove(p, beta, wD, D, wV, V, grid_pairs):
+def betaJumpMove(p: np.ndarray, beta: float, wD, D, wV, V, grid_pairs):
     pb = p + beta
     D[0,...] = wD * p**2
     D[1,...] = wD * pb**2
