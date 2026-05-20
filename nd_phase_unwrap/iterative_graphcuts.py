@@ -18,15 +18,17 @@ def computeGraphEdges(shape, cyclic):
     return pairs
 
 
-def solveMaxflow(D, V, grid_pairs):
-    """Solve a submodular binary MRF via BK max-flow; returns int8 labels in {0,1}."""
+def solve_maxflow(D, V, grid_pairs):
     shape = V.shape[2:]
-    n = int(np.prod(shape))
-    ndim = len(grid_pairs)
-    D_flat = D.reshape(2, n)
-    V_flat = V.reshape(4, ndim, n)
-    src_cap, snk_cap = D_flat[1].copy(), D_flat[0].copy()
-    ei, ej, cij, cji = [], [], [], []
+    num_nodes = np.prod(shape)
+    num_neighbours = len(grid_pairs)
+    
+    graph = maxflow.GraphFloat()
+    nids = graph.add_grid_nodes(shape)
+
+    src_cap, snk_cap = (D[1].flatten(), D[0].flatten()) if D is not None else (np.zeros(num_nodes, dtype=V.dtype), np.zeros(num_nodes, dtype=V.dtype))
+    
+    V_flat = V.reshape(4, num_neighbours, num_nodes)
 
     for dim, (ii, jj) in enumerate(grid_pairs):
         Ai, Bi, Ci = V_flat[0, dim, ii], V_flat[1, dim, ii], V_flat[2, dim, ii]
@@ -40,22 +42,16 @@ def solveMaxflow(D, V, grid_pairs):
         cap_ji = np.maximum(0.0, c + np.minimum(0.0, b))
         mask = (cap_ij > 0) | (cap_ji > 0)
         if np.any(mask):
-            ei.append(ii[mask]); ej.append(jj[mask])
-            cij.append(cap_ij[mask]); cji.append(cap_ji[mask])
+            graph.add_edges(ii[mask], jj[mask], cap_ij[mask], cap_ji[mask])
 
-    g = maxflow.GraphFloat()
-    nids = g.add_grid_nodes(shape)
-    g.add_grid_tedges(nids, src_cap.reshape(shape), snk_cap.reshape(shape))
-    if ei:
-        g.add_edges(np.concatenate(ei), np.concatenate(ej),
-                    np.concatenate(cij), np.concatenate(cji))
-    g.maxflow()
-    return g.get_grid_segments(nids).astype(np.int8)
+    graph.add_grid_tedges(nids, src_cap.reshape(shape), snk_cap.reshape(shape))
+    graph.maxflow() # Boykov-Kolmogorov max-flow algorithm
+    return graph.get_grid_segments(nids)
 
 
 def beta_jump_move(p, beta, wD, wV, grid_pairs):
     pb = p + beta
-    D = np.array((wD * p**2, wD * pb**2)) if wD is not None else np.zeros((2, *p.shape))
+    D = np.array((wD * p**2, wD * pb**2)) if wD is not None else None
     V = np.zeros((4, p.ndim, *p.shape))
     for dim in range(p.ndim):
         V[:, dim, ...] = wV[dim] * [
@@ -64,7 +60,7 @@ def beta_jump_move(p, beta, wD, wV, grid_pairs):
             (pb - np.roll(p , -1, axis=dim))**2,
             (pb - np.roll(pb, -1, axis=dim))**2
         ]
-    label = solveMaxflow(D, V, grid_pairs)
+    label = solve_maxflow(D, V, grid_pairs)
     p[label==1] += beta
     return p
 
