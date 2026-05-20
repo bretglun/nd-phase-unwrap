@@ -1,37 +1,54 @@
 import numpy as np
 import maxflow
+from itertools import product
 
 
-def computeGraphEdges(shape, cyclic):
-    """Flat (i, j) endpoint indices of graph edges, one (i, j) tuple per dim."""
-    ndim = len(shape)
-    idx = np.arange(int(np.prod(shape))).reshape(shape)
-    pairs = []
-    for dim in range(ndim):
-        if cyclic[dim]:
-            ii, jj = idx.ravel(), np.roll(idx, -1, axis=dim).ravel()
-        else:
-            sl = [slice(None)] * ndim
-            sl[dim] = slice(None, -1); ii = idx[tuple(sl)].ravel()
-            sl[dim] = slice(1, None);  jj = idx[tuple(sl)].ravel()
-        pairs.append((ii.astype(np.int32), jj.astype(np.int32)))
-    return pairs
+def get_neighbourhood(radius, pixel_spacing):
+    bound = np.floor(radius / np.array(pixel_spacing)).astype(int)
+    candidates = product(*(range(-b, b + 1) for b in bound))
+    neighbours = [ngb for ngb in candidates
+                  if ngb > (0,) * len(pixel_spacing) # filter out duplicates in opposite directions and origin
+                  and np.linalg.norm(np.array(ngb) * pixel_spacing) <= radius]
+    # make sure immediate neighbours are always included:
+    neighbours.extend([immediate for immediate in np.eye(len(pixel_spacing), dtype=int) if tuple(immediate) not in neighbours])
+    return np.array(neighbours)
 
 
-def solve_maxflow(D, V, grid_pairs):
-    shape = V.shape[2:]
-    num_nodes = np.prod(shape)
-    num_neighbours = len(grid_pairs)
+def get_neighbour_indices(neighbourhood, shape, cyclic):
+    assert neighbourhood.shape[1] == len(shape)
+    assert len(shape) == len(cyclic)
+    num_ngb = neighbourhood.shape[0]
+    num_voxels = np.prod(shape)
+    indices = np.arange(num_voxels).reshape(shape)
+    ngb_indices = np.empty(shape=(num_ngb, *shape), dtype=int)
+    edge_ngb = np.full(shape=(num_ngb, *shape), fill_value=False)
+    for ngb in range(num_ngb):
+        for axis, shift in enumerate(neighbourhood[ngb]):
+            if cyclic[axis] or shift==0:
+                continue
+            slices = [slice(None)] * indices.ndim
+            if shift < 0:
+                slices[axis] = slice(0, -shift)
+            if shift > 0:
+                slices[axis] = slice(-shift, shape[axis])
+            edge_ngb[ngb, *tuple(slices)] = True
+        ngb_indices[ngb] = np.roll(indices, shift=-neighbourhood[ngb], axis=range(indices.ndim))
+    return ngb_indices.reshape(num_ngb, num_voxels), edge_ngb.reshape(num_ngb, num_voxels)
+
+
+def solve_maxflow(D, V, ngb_indices):
+    num_nodes = V.shape[2]
+    num_neighbours = len(ngb_indices)
     
     graph = maxflow.GraphFloat()
-    nids = graph.add_grid_nodes(shape)
+    graph.add_grid_nodes(num_nodes)
 
-    src_cap, snk_cap = (D[1].flatten(), D[0].flatten()) if D is not None else (np.zeros(num_nodes, dtype=V.dtype), np.zeros(num_nodes, dtype=V.dtype))
+    src_cap, snk_cap = (D[1], D[0]) if D is not None else (np.zeros(num_nodes, dtype=V.dtype), np.zeros(num_nodes, dtype=V.dtype))
     
-    V_flat = V.reshape(4, num_neighbours, num_nodes)
-
-    for dim, (ii, jj) in enumerate(grid_pairs):
-        Ai, Bi, Ci = V_flat[0, dim, ii], V_flat[1, dim, ii], V_flat[2, dim, ii]
+    ii = np.arange(num_nodes)
+    for q in range(num_neighbours): # loop over neighbours
+        jj = ngb_indices[q]
+        Ai, Bi, Ci = V[0, q, ii], V[1, q, ii], V[2, q, ii]
         b, c = Bi - Ai, Ci - Ai  # b+c >= 0 (submodular)
         # Reparameterise into non-negative tedges + directed edges.
         src_cap[ii] += np.maximum(0.0, -b)
@@ -44,51 +61,43 @@ def solve_maxflow(D, V, grid_pairs):
         if np.any(mask):
             graph.add_edges(ii[mask], jj[mask], cap_ij[mask], cap_ji[mask])
 
-    graph.add_grid_tedges(nids, src_cap.reshape(shape), snk_cap.reshape(shape))
+    graph.add_grid_tedges(ii, src_cap, snk_cap)
     graph.maxflow() # Boykov-Kolmogorov max-flow algorithm
-    return graph.get_grid_segments(nids)
+    return graph.get_grid_segments(ii)
 
 
-def beta_jump_move(p, beta, wD, wV, grid_pairs):
+def beta_jump_move(phase, beta, wD, wV, ngb_indices):
+    p = phase.flatten()
     pb = p + beta
     D = np.array((wD * p**2, wD * pb**2)) if wD is not None else None
-    V = np.zeros((4, p.ndim, *p.shape))
-    for dim in range(p.ndim):
-        V[:, dim, ...] = wV[dim] * [
-            (p  - np.roll(p , -1, axis=dim))**2,
-            (p  - np.roll(pb, -1, axis=dim))**2,
-            (pb - np.roll(p , -1, axis=dim))**2,
-            (pb - np.roll(pb, -1, axis=dim))**2
-        ]
-    label = solve_maxflow(D, V, grid_pairs)
+    V = wV * [
+        (p  -  p[ngb_indices])**2,
+        (p  - pb[ngb_indices])**2,
+        (pb -  p[ngb_indices])**2,
+        (pb - pb[ngb_indices])**2]
+    label = solve_maxflow(D, V, ngb_indices)
     p[label==1] += beta
-    return p
+    return p.reshape(phase.shape)
 
 
-def get_weights(magn, pixel_spacing, data_cost=0):
-    M2p = magn**2
-    wD = data_cost * M2p if data_cost > 0 else None
-    wV = np.zeros((magn.ndim, *magn.shape))
-    for dim in range(magn.ndim):
-        M2q = np.roll(M2p, -1, axis=dim)
-        with np.errstate(divide='ignore', invalid='ignore'): # suppress divide-by-zero warning
-            wV[dim] = M2p * M2q / (M2p + M2q) / pixel_spacing[dim]
-    wV[np.isnan(wV)] = 0.
-    return wD, wV
-
-
-def get_energy_with_weights(phase, wD, wV, cyclic):
-    energy = np.sum(wD * phase**2) if wD is not None else 0.
-    for dim in range(phase.ndim):
-        energy += np.sum(wV[dim] * (phase  - np.roll(phase , -1, axis=dim))**2)
-        if not cyclic[dim]:
-            energy -= np.sum(wV[dim].take(-1, axis=dim) * (phase.take(-1, axis=dim) - phase.take(0, axis=dim))**2)
+def get_energy(phase, wD, wV, ngb_indices):
+    p = phase.flatten()
+    energy = np.sum(wD * p**2) if wD is not None else 0.
+    energy += np.sum(wV * (p  - p[ngb_indices])**2)
     return energy
 
 
-def get_energy(phase, magn, pixel_spacing, data_cost, cyclic):
-    wD, wV = get_weights(magn, pixel_spacing, data_cost)
-    return get_energy_with_weights(phase, wD, wV, cyclic)
+def get_weights(magn, pixel_spacing, neighbourhood, ngb_indices, edge_ngb, data_cost=0):
+    M2p = magn.flatten()**2
+    wD = data_cost * M2p if data_cost > 0 else None
+    wV = np.zeros((magn.ndim, *magn.shape))
+    with np.errstate(divide='ignore', invalid='ignore'): # suppress divide-by-zero warning
+        wV = 1 / (1/M2p + 1/M2p[ngb_indices])
+    wV[np.isnan(wV)] = 0.
+    distance = np.linalg.norm(neighbourhood * pixel_spacing, axis=1)[:, None]
+    wV /= distance * np.sum(1 / distance)
+    wV[edge_ngb] = 0
+    return wD, wV
 
 
 def remove_drift(phase, magn, period):
@@ -100,16 +109,18 @@ def remove_drift(phase, magn, period):
 def unwrap(arr, config):
     magn, phase = np.abs(arr), np.angle(arr)
 
-    wD, wV = get_weights(magn, config.pixel_spacing, config.data_cost)
-    grid_pairs = computeGraphEdges(phase.shape, config.cyclic)
+    neighbourhood = get_neighbourhood(config.neighbourhood_radius, config.pixel_spacing)
+    ngb_indices, edge_ngb = get_neighbour_indices(neighbourhood, arr.shape, config.cyclic)
 
-    min_energy = get_energy_with_weights(phase, wD, wV, config.cyclic)
+    wD, wV = get_weights(magn, config.pixel_spacing, neighbourhood, ngb_indices, edge_ngb, config.data_cost)
+
+    min_energy = get_energy(phase, wD, wV, ngb_indices)
     improved = True
     while improved:
         improved = False
         for beta in [2 * np.pi, -2 * np.pi]: # 2pi jump moves with alternating sign
-            phase_updated = beta_jump_move(phase, beta, wD, wV, grid_pairs)
-            energy = get_energy_with_weights(phase_updated, wD, wV, config.cyclic)
+            phase_updated = beta_jump_move(phase, beta, wD, wV, ngb_indices)
+            energy = get_energy(phase_updated, wD, wV, ngb_indices)
             if energy < min_energy:
                 improved = True
                 phase = phase_updated

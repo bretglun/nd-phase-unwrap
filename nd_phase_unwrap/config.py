@@ -24,3 +24,4 @@ class LaplaceConfig(BaseConfig):
 @dataclass
 class IGCconfig(BaseConfig):
     data_cost: float = 0. # weight of data cost in energy function (to avoid global 2π-drift)
+    neighbourhood_radius: float = 0. # in same units as pixel_spacing, 0 means only immediate neighbours
