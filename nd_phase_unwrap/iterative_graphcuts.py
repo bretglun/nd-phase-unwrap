@@ -38,32 +38,30 @@ def get_neighbour_indices(neighbourhood, shape, cyclic):
 
 def solve_maxflow(unary_costs, binary_costs, ngb_indices):
     num_nodes = binary_costs.shape[2]
-    num_neighbours = len(ngb_indices)
     
     graph = maxflow.GraphFloat()
     graph.add_grid_nodes(num_nodes)
 
     src_cap, snk_cap = (unary_costs[1], unary_costs[0]) if unary_costs is not None else (np.zeros(num_nodes, dtype=binary_costs.dtype), np.zeros(num_nodes, dtype=binary_costs.dtype))
     
-    ii = np.arange(num_nodes)
-    for q in range(num_neighbours): # loop over neighbours
-        jj = ngb_indices[q]
-        Ai, Bi, Ci = binary_costs[0, q, ii], binary_costs[1, q, ii], binary_costs[2, q, ii]
-        b, c = Bi - Ai, Ci - Ai  # b+c >= 0 (submodular)
-        # Reparameterise into non-negative tedges + directed edges.
-        src_cap[ii] += np.maximum(0.0, -b)
-        snk_cap[ii] += np.maximum(0.0, -c)
-        src_cap[jj] += np.minimum(Ai, Bi)
-        snk_cap[jj] += np.minimum(Ai, Ci)
-        cap_ij = np.maximum(0.0, b + np.minimum(0.0, c))
-        cap_ji = np.maximum(0.0, c + np.minimum(0.0, b))
-        mask = (cap_ij > 0) | (cap_ji > 0)
-        if np.any(mask):
-            graph.add_edges(ii[mask], jj[mask], cap_ij[mask], cap_ji[mask])
+    i = np.arange(num_nodes)
+    for ngb, j in enumerate(ngb_indices): # loop over neighbours
+        # Add edge capacities following Kolmogorov and Zabih 2004
+        A, B, C, D = binary_costs[:, ngb]
 
-    graph.add_grid_tedges(ii, src_cap, snk_cap)
+        src_cap[i[C > A]]  += (C - A)[C > A]
+        snk_cap[i[A >= C]] += (A - C)[A >= C]
+
+        snk_cap[j[C > D]]  += (C - D)[C > D]
+        src_cap[j[D >= C]] += (D - C)[D >= C]
+
+        edge_cap = B + C - A - D
+
+        graph.add_edges(i, j, edge_cap, np.zeros(num_nodes))
+
+    graph.add_grid_tedges(i, src_cap, snk_cap)
     graph.maxflow() # Boykov-Kolmogorov max-flow algorithm
-    return graph.get_grid_segments(ii)
+    return graph.get_grid_segments(i)
 
 
 def beta_jump_move(phase, beta, unary_weights, binary_weights, ngb_indices):
