@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 
 def demo():
-    data_path = Path(__file__).parent.parent / 'test_data'
+    data_path = Path(__file__).parent.parent / 'test_data' / '2+1D_phantom'
     data_file = data_path / '1wrapsVNR1e3_0.npy'
     wrapped = io.load_numpy_data(data_file)
     config = {
