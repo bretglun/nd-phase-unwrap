@@ -13,13 +13,13 @@ CONFIG = {
 
 def demo():
     data_path = Path(__file__).parent.parent / 'test_data'
-    in_path = data_path / 'raclette'
-    out_path = data_path / 'raclette'
+    in_path = data_path / 'Synth_4Dflow'
+    out_path = data_path / 'Synth_4Dflow'
     if not out_path.is_dir():
         out_path.mkdir(parents=True)
 
     # for file in [j for j in os.listdir(in_path) if j.endswith('.npy')]:
-    for file in ['wrapped_GroundTruth001_comp_1wraps.npy']:
+    for file in ['GroundTruth001.npy']:
         print (f'Processing file {file}...')
         data_file = in_path / file
         rawdata = io.load_numpy_data(data_file)
