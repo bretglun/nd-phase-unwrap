@@ -7,8 +7,9 @@ CONFIG = {
     'algorithm': 'IterativeGraphCuts',
     'pixel_spacing': (2.0, 2.0, 2.0, 20.0),
     'cyclic': (False, False, False, True),
-    'data_cost': True,
-    'neighbourhood_radius': 1.0
+    'data_cost': 0.001,
+    'neighbourhood_radius': 2.0,
+    'neighbourhood_weight': 10.0**2
 }
 
 def demo():

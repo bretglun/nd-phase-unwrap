@@ -25,3 +25,14 @@ class LaplaceConfig(BaseConfig):
 class IGCconfig(BaseConfig):
     data_cost: float = 0. # weight of data cost in energy function (to avoid global 2π-drift)
     neighbourhood_radius: float = 0. # in same units as pixel_spacing, 0 means only immediate neighbours
+    neighbourhood_weight: float|tuple = 1. # Lambda values for weighting spatial to temporal neighbors. Scalar inputs assumes the time dimension to be at the last place. Alternatively can a tuple with the same dims as pixel spacing be given to set the weighting for each dimension
+
+    # weights can be either given as scalars or an 1D array of the same length as the number of dimensions in the input array
+    def __post_init__(self):
+        if type(self.neighbourhood_weight) == int:
+            self.neighbourhood_weight = float(self.neighbourhood_weight)
+        if type(self.neighbourhood_weight) == float:
+            self.neighbourhood_weight = tuple(1.0 if i != len(self.pixel_spacing)-1 else self.neighbourhood_weight for i in range(len(self.pixel_spacing)))
+        if len(self.neighbourhood_weight) != len(self.pixel_spacing):
+            raise ValueError(f"The given neighborhood weights do not have the same amount of dimensions {len(self.neighbourhood_weight)} as the pixel spacing {len(self.pixel_spacing)}")
+        
