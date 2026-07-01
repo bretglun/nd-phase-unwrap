@@ -98,7 +98,7 @@ def get_energy(phase, unary_weights, binary_weights, ngb_indices):
     return energy
 
 
-def get_weights(magn, pixel_spacing, neighbourhood, ngb_indices, edge_ngb, data_cost=0):
+def get_weights(magn, pixel_spacing, neighbourhood, temp_spat_weights, ngb_indices, edge_ngb, data_cost=0):
     M2p = magn.flatten()**2
     unary_weights = data_cost * M2p if data_cost > 0 else None
     binary_weights = np.zeros((magn.ndim, *magn.shape))
@@ -106,7 +106,8 @@ def get_weights(magn, pixel_spacing, neighbourhood, ngb_indices, edge_ngb, data_
         binary_weights = 1 / (1/M2p + 1/M2p[ngb_indices])
     binary_weights[np.isnan(binary_weights)] = 0.
     distance = np.linalg.norm(neighbourhood * pixel_spacing, axis=1)[:, None]
-    binary_weights /= distance * np.sum(1 / distance)
+    lambda_weights = np.linalg.norm(neighbourhood * temp_spat_weights, axis=1)[:, None]
+    binary_weights = (binary_weights / (distance * np.sum(1/distance))) * lambda_weights
     binary_weights[edge_ngb] = 0
     return unary_weights, binary_weights
 
@@ -128,7 +129,7 @@ def unwrap(arr, config):
         masked_voxels, ngb_indices, edge_ngb = apply_mask(config.mask, ngb_indices, edge_ngb)
         magn, phase = magn.flatten()[masked_voxels], phase.flatten()[masked_voxels]
 
-    unary_weights, binary_weights = get_weights(magn, config.pixel_spacing, neighbourhood, ngb_indices, edge_ngb, config.data_cost)
+    unary_weights, binary_weights = get_weights(magn, config.pixel_spacing, neighbourhood, config.neighbourhood_weight, ngb_indices, edge_ngb, config.data_cost)
 
     min_energy = get_energy(phase, unary_weights, binary_weights, ngb_indices)
     improved = True
