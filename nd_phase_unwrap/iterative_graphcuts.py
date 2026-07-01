@@ -36,6 +36,19 @@ def get_neighbour_indices(neighbourhood, shape, cyclic):
     return ngb_indices.reshape(num_ngb, num_voxels), edge_ngb.reshape(num_ngb, num_voxels)
 
 
+def apply_mask(mask, ngb_indices, edge_ngb):
+    flat_mask = mask.flatten()
+    masked_voxels = np.flatnonzero(flat_mask)
+    remap = np.empty(flat_mask.size, dtype=int)
+    remap[masked_voxels] = np.arange(masked_voxels.size)
+    ngb_full = ngb_indices[:, masked_voxels]
+    leaving_mask = ~flat_mask[ngb_full]
+    ngb_compact = remap[ngb_full]
+    ngb_compact[leaving_mask] = 0
+    edge_ngb = edge_ngb[:, masked_voxels] | leaving_mask
+    return masked_voxels, ngb_compact, edge_ngb
+
+
 def solve_maxflow(unary_costs, binary_costs, ngb_indices):
     num_nodes = binary_costs.shape[2]
     
@@ -110,6 +123,11 @@ def unwrap(arr, config):
     neighbourhood = get_neighbourhood(config.neighbourhood_radius, config.pixel_spacing)
     ngb_indices, edge_ngb = get_neighbour_indices(neighbourhood, arr.shape, config.cyclic)
 
+    if config.mask is not None: # restrict graph to masked voxels for performance
+        print(f'Applying mask of which covers {100 * np.mean(config.mask):.2f}% of the array...')
+        masked_voxels, ngb_indices, edge_ngb = apply_mask(config.mask, ngb_indices, edge_ngb)
+        magn, phase = magn.flatten()[masked_voxels], phase.flatten()[masked_voxels]
+
     unary_weights, binary_weights = get_weights(magn, config.pixel_spacing, neighbourhood, ngb_indices, edge_ngb, config.data_cost)
 
     min_energy = get_energy(phase, unary_weights, binary_weights, ngb_indices)
@@ -125,4 +143,8 @@ def unwrap(arr, config):
                 min_energy = energy
     if not config.data_cost:
         phase = remove_drift(phase, magn, period=2*np.pi)
+    if config.mask is not None: # scatter result back, leaving unmasked voxels at their wrapped phase
+        out = np.angle(arr)
+        out.flat[masked_voxels] = phase
+        phase = out
     return phase

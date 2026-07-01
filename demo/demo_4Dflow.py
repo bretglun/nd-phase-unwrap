@@ -7,19 +7,20 @@ CONFIG = {
     'algorithm': 'IterativeGraphCuts',
     'pixel_spacing': (2.0, 2.0, 2.0, 20.0),
     'cyclic': (False, False, False, True),
-    'data_cost': True,
-    'neighbourhood_radius': 1.0
+    'data_cost': 0.001,
+    'neighbourhood_radius': 1.0,
+    'mask': None
 }
 
 def demo():
     data_path = Path(__file__).parent.parent / 'test_data'
-    in_path = data_path / 'Synth_4Dflow'
-    out_path = data_path / 'Synth_4Dflow'
+    in_path = data_path / '3+1D_phantom'
+    out_path = data_path / '3+1D_phantom'
     if not out_path.is_dir():
         out_path.mkdir(parents=True)
 
     # for file in [j for j in os.listdir(in_path) if j.endswith('.npy')]:
-    for file in ['GroundTruth001.npy']:
+    for file in ['1wraps.npy']:
         print (f'Processing file {file}...')
         data_file = in_path / file
         rawdata = io.load_numpy_data(data_file)

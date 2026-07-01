@@ -12,6 +12,6 @@ wheels/
 .*
 !.gitignore
 
-*_unwrapped.npy
+test_data/*/*.npy
 
 TODO.md
