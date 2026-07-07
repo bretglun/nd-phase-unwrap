@@ -27,7 +27,7 @@ class IGCconfig(BaseConfig):
     data_cost: float = 0. # weight of data cost in energy function (to avoid global 2π-drift)
     neighbourhood_radius: float = 0. # in same units as pixel_spacing, 0 means only immediate neighbours
     mask: np.ndarray = None # boolean array of same shape as arr, True for voxels to include in graph
-    neighbourhood_weight: float|tuple = 1. # Lambda values for weighting spatial to temporal neighbors. Scalar inputs assumes the time dimension to be at the last place. Alternatively can a tuple with the same dims as pixel spacing be given to set the weighting for each dimension
+    neighbourhood_weight: float|tuple[float, ...] = 1. # Lambda values for weighting spatial to temporal neighbors. Scalar inputs assumes the time dimension to be at the last place. Alternatively can a tuple with the same dims as pixel spacing be given to set the weighting for each dimension
 
     # weights can be either given as scalars or an 1D array of the same length as the number of dimensions in the input array
     def __post_init__(self):

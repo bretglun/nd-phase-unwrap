@@ -107,7 +107,7 @@ def get_weights(magn, pixel_spacing, neighbourhood, temp_spat_weights, ngb_indic
     binary_weights[np.isnan(binary_weights)] = 0.
     distance = np.linalg.norm(neighbourhood * pixel_spacing, axis=1)[:, None]
     lambda_weights = np.linalg.norm(neighbourhood * temp_spat_weights, axis=1)[:, None]
-    binary_weights = (binary_weights / (distance * np.sum(1/distance))) * lambda_weights
+    binary_weights = (binary_weights / distance) * lambda_weights
     binary_weights[edge_ngb] = 0
     return unary_weights, binary_weights
 
