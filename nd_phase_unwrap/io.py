@@ -42,3 +42,35 @@ def save(arr, filepath):
         raise ValueError(f'Must save as .npy file, not "{filepath}"')
     print(f'Writing array to "{filepath}"')
     np.save(filepath, arr)
+
+
+def _optionalImport_nibabel():
+    try:
+        import nibabel as nib
+    except ImportError as e:
+        raise ImportError(
+            'The "nibabel" package is required for NIfTI conversions. '
+            'Install it with "pip install nibabel".'
+        ) from e
+    return nib
+
+
+def save_to_nifti(arr, filepath, voxel_size=None):
+    nib = _optionalImport_nibabel()
+    filepath = Path(filepath)
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    if filepath.suffix not in ('.nii', '.gz'):
+        raise ValueError(f'Must save as .nii or .nii.gz file, not "{filepath}"')
+    affine = np.fill_diagonal(np.zeros((4, 4)), voxel_size if voxel_size is not None else 1)
+    img = nib.Nifti1Image(np.asarray(arr), affine)
+    print(f'Writing NIfTI array to "{filepath}"')
+    nib.save(img, str(filepath))
+
+
+def load_nifti(filepath):
+    nib = _optionalImport_nibabel()
+    filepath = Path(filepath)
+    if not filepath.is_file():
+        raise FileNotFoundError(f'Could not find NIfTI file "{filepath}"')
+    img = nib.load(str(filepath))
+    return np.asarray(img.dataobj)
