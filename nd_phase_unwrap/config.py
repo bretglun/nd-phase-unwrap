@@ -23,6 +23,17 @@ class LaplaceConfig(BaseConfig):
 
 
 @dataclass
+class ROMEOconfig(BaseConfig):
+    mask: np.ndarray = None # boolean array of same shape as arr, passed to ROMEO as a mask file
+    mask_strategy: str = None # ROMEO "-k" option used when no explicit mask array is given (e.g. 'robustmask', 'qualitymask', 'nomask')
+    use_magnitude: bool = True # pass the magnitude of complex input to ROMEO ("-m") to improve unwrapping
+    individual: bool = False # ROMEO "-i": unwrap the extra (4th) dimension spatially instead of temporally
+    echo_times: str = None # ROMEO "-t" option, e.g. '[1.5,3.0]', '3.5:3.5:14' or 'epi'
+    romeo_path: str = None # path to the ROMEO executable (defaults to $ROMEO_BINARY or 'romeo' on PATH)
+    extra_args: tuple[str, ...] = () # additional command-line arguments passed verbatim to ROMEO
+
+
+@dataclass
 class IGCconfig(BaseConfig):
     data_cost: float = 0. # weight of data cost in energy function (to avoid global 2π-drift)
     neighbourhood_radius: float = 0. # in same units as pixel_spacing, 0 means only immediate neighbours
