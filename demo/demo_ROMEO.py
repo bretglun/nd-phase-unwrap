@@ -21,8 +21,8 @@ CONFIG = {
     'algorithm': 'ROMEO',
     'pixel_spacing': (2.0, 2.0, 2.0, 20.0),
     'cyclic': (False, False, False, True),
-    'individual': True,      # timepoints in the 4th dim -> unwrap each spatially
-    'use_magnitude': False,  # test data phase is stored with unit magnitude
+    'individual': False,      # timepoints in the 4th dim -> unwrap each spatially
+    'use_magnitude': True,  # test data phase is stored with unit magnitude
     'echo_times': 'epi',
     'mask': None,
     'romeo_path': 'path/to/romeo',  # uncomment if ROMEO is not on PATH
@@ -32,7 +32,6 @@ CONFIG = {
 def demo():
     data_path = Path(__file__).parent.parent / 'test_data'
     in_path = data_path / 'Synth_4Dflow'
-    mask_path = data_path / 'Synth_4Dflow_mask_dilated'
     out_path = data_path / 'Synth_4Dflow_unwrapped_romeo'
     if not out_path.is_dir():
         out_path.mkdir(parents=True)
@@ -40,16 +39,13 @@ def demo():
     for file in [j for j in os.listdir(in_path) if j.endswith('.npy')]:
         print(f'Processing file {file}...')
         data_file = in_path / f'{file}'
-        rawdata = np.angle(io.load_numpy_data(data_file))
+        rawdata = io.load_numpy_data(data_file)
         basefilename = Path(file).stem
-        maskdata = io.load_numpy_data(mask_path / f'{basefilename[:5]}_mask_dilated.npy')
         saverdata = np.zeros(rawdata.shape, dtype=np.float32)
-        for dim in range(rawdata.shape[-1]):
-            CONFIG['mask'] = maskdata[..., 0, dim]
-            print(f'Unwrapping dimension {dim} of shape {file}...')
-            phaseArray = unwrap.unwrap(rawdata[..., dim], CONFIG)
-            print(f'Unwrapped {file} with shape {phaseArray.shape} and dtype {phaseArray.dtype}')
-            saverdata[..., dim] = phaseArray
+        for vencdir in range(rawdata.shape[-1]):
+            print(f'Unwrapping dimension {vencdir} of shape {file}...')
+            phaseArray = unwrap.unwrap(rawdata[..., vencdir], CONFIG)
+            saverdata[..., vencdir] = phaseArray
         io.save(saverdata, out_path / f'{basefilename}_unwrapped.npy')
 
 
