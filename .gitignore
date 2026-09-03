@@ -15,3 +15,6 @@ wheels/
 test_data/*/*.npy
 
 TODO.md
+*.npy
+*.json
+*.csv

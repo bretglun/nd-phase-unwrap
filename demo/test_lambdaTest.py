@@ -27,11 +27,11 @@ def demo():
 
     for file in [j for j in os.listdir(in_path) if (j.endswith('1wraps.npy') or j.endswith('3wraps.npy') or j.endswith('5wraps.npy'))]:
         print (f'Processing file {file}...')
-        for lbda in [0.0,0.5,1.0,1.5,2.0,2.5,3.0]:
+        for lbda in [0.0,0.5,1.0,1.5,2.0,2.5,3.0,3.5,4.0]:
             data_file = in_path / file
             rawdata = io.load_numpy_data(data_file)
             saverdata = np.zeros(rawdata.shape, dtype=np.float32)
-            CONFIG['neighbourhood_weight'] = lbda
+            CONFIG['neighbourhood_weight'] = 10**lbda
             for dim in range(rawdata.shape[-1]):
                 print(f'Unwrapping dimension {dim} of shape {file}...')
                 phaseArray = unwrap.unwrap(rawdata[..., dim], CONFIG)
