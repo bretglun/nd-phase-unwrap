@@ -66,7 +66,7 @@ def unwrap(arr, config):
 
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
-            if 'ERROR: AssertionError: Unwrap-weights are all zero!' in result.stderr:
+            if 'AssertionError: Unwrap-weights are all zero!' in result.stderr:
                 print('ROMEO failed due to all-zero weights; returning original phase.')
                 return phase  # ROMEO failed due to all-zero weights; return original phase
             raise RuntimeError(
